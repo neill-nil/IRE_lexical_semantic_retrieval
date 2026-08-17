@@ -1,0 +1,24 @@
+# Data and Archives
+data/
+*.zip
+*.tar.gz
+*.crdownload
+
+# Model Checkpoints and Embeddings
+*.pt
+*.ckpt
+*.bin
+*.h5
+
+# Python Caches
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Virtual Environments
+venv/
+env/
+.env
+
+# System Files
+.DS_Store
