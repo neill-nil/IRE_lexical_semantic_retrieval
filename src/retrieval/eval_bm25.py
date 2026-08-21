@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import logging
 import pandas as pd
 import numpy as np
@@ -37,12 +38,8 @@ def evaluate_dataset(dataset_name):
     # Metrics
     recalls = {50: [], 100: [], 200: []}
     
-    # Speed up offline evaluation by sampling
-    if len(impressions) > 2500:
-        impressions = impressions.sample(n=2500, random_state=42)
-        
     total_impressions = len(impressions)
-    logging.info(f"Scoring {total_impressions} impressions in the test set (sampled)...")
+    logging.info(f"Scoring {total_impressions} impressions in the test set...")
     
     k1, b, avgdl = bm25.k1, bm25.b, bm25.avgdl
     
@@ -94,9 +91,17 @@ def evaluate_dataset(dataset_name):
             
     # Final Metric Aggregation
     logging.info(f"Results for {dataset_name}:")
+    
+    saved_metrics = {}
     for K in [50, 100, 200]:
         mean_recall = np.mean(recalls[K]) if recalls[K] else 0.0
+        saved_metrics[f"Recall@{K}"] = float(mean_recall)
         logging.info(f"  Recall@{K}: {mean_recall:.4f}")
+        
+    metrics_path = os.path.join(store_dir, 'metrics_bm25.json')
+    with open(metrics_path, 'w') as f:
+        json.dump(saved_metrics, f, indent=4)
+    logging.info(f"Saved BM25 metrics to {metrics_path}")
 
 if __name__ == '__main__':
     # You can specify which datasets to run evaluation on

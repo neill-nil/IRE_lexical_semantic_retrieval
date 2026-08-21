@@ -53,3 +53,24 @@ This document tracks the prompts provided by the user for Assignment 1: Lexical 
 ## Prompt: 2026-08-20
 > okay lets move ahead with the plan of creating our own embeddings for both the languages and we will use them. before we go on give an estimate as to how long it will take to download and then compute for the embeddings. do it per language and also suggest which base models (like BERT and ROBERTa) you propose and justify
 
+## Prompt: 2026-08-21
+> does paraphrase-multilingual-MiniLM-L12-v2 hhave similar embeddings for both english and danish. is it the best choice and why
+
+## Prompt: 2026-08-21
+> ok lets choose that and first start downloading all dependencies as mentioned
+
+## Prompt: 2026-08-21
+> check status and give me a time estimate
+
+## Prompt: 2026-08-21
+> so far wehave the embedding models and computed our own embeddings ? so now I think ANN index is the next step right? lets plan it
+
+## Prompt: 2026-08-21
+> why is indexing necessary when we already have the vectors> discuss
+
+## Prompt: 2026-08-21
+> one final thing before moving on, are the metrics we already calculated upto Q3 already enough for these small datasets or would they need running again? I will obviously do it again for large later but right now tell me for the small
+
+## Prompt: 2026-08-21
+> what do we need to do now for step 5 and 6? i dont think we can submit on small dataset anyway. I plan to run the entire small dataset on this pipeline start to finish overnight so i can have updated results tomorrow and then start with big datasets. but before all of that is there anything we should tackle first?
+

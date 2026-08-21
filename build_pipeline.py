@@ -1,6 +1,6 @@
 import argparse
 import logging
-from src.data_pipeline import extract, clean, split, feature_store
+from src.data_pipeline import extract, clean, split, feature_store, embed
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -23,12 +23,16 @@ def main():
     # Step 3: Temporal Train/Val/Test Split
     logging.info("--- Step 3: Temporal splitting ---")
     split.run(dataset=args.dataset)
-
-    # Step 4: Create Feature Store
-    logging.info("--- Step 4: Building Feature Store ---")
+    
+    # Step 4: Finalize Feature Store
+    logging.info("--- Step 4: Finalizing Feature Store ---")
     feature_store.run(dataset=args.dataset)
-
-    logging.info("Pipeline completed successfully! All data is in the feature_store.")
+    
+    # Step 5: Compute Semantic Embeddings
+    logging.info("--- Step 5: Computing Semantic Embeddings ---")
+    embed.run(dataset=args.dataset)
+    
+    logging.info("Data pipeline build complete!")
 
 if __name__ == "__main__":
     main()
