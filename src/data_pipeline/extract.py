@@ -23,12 +23,16 @@ def run(dataset='both'):
         if 'word2vec' in filename.lower() or 'bert' in filename.lower() or 'roberta' in filename.lower():
             continue
             
-        logging.info(f"Extracting {filename} into {data_dir}...")
-        
-        # Create a specific folder for this zip to avoid overlapping
         extract_to = os.path.join(data_dir, filename.replace('.zip', ''))
+        
+        # Skip if already extracted
+        if os.path.exists(extract_to) and len(os.listdir(extract_to)) > 0:
+            logging.info(f"Skipping {filename}, already extracted at {extract_to}")
+            continue
+            
         os.makedirs(extract_to, exist_ok=True)
         
+        logging.info(f"Extracting {filename} into {extract_to}...")
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_to)
             

@@ -1,0 +1,55 @@
+# AI Usage Log
+
+This document tracks the prompts provided by the user for Assignment 1: Lexical & Semantic Retrieval on EB-NeRD and MIND, as required by the assignment deliverables.
+
+## Prompts
+
+*(Prompt logging begins here)*
+## Prompt: 2026-08-19
+> Lets start with the data cleaning for the data available in the zip files. and then we will parse it to a unified schema, keep working with what we already have and if there is any confusion discuss with me first
+
+## Prompt: 2026-08-19
+> ok go ahea with the plan
+
+## Prompt: 2026-08-19
+> lets do temporal splitting as mentioned
+
+## Prompt: 2026-08-19
+> (User clicked Approve on the Temporal Splitting implementation plan)
+
+## Prompt: 2026-08-19
+> where can i view the cleaned and split dataset so i can check it? also what about the merged one
+
+## Prompt: 2026-08-19
+> have we done this yet: One-command rebuild — a single script (e.g., make data or python build_pipeline.py) that rebuilds everything from raw files
+
+## Prompt: 2026-08-19
+> lets execute Lexical Candidate Generation (BM25) step by step. start with building an inverted index over article text. come up with an implementation plan and let me verify it.
+
+## Prompt: 2026-08-19
+> (User clicked Approve on the BM25 Inverted Index implementation plan)
+
+## Prompt: 2026-08-19
+> what does query mean in this case that we are constructing make things clear
+
+## Prompt: 2026-08-20
+> tell me how will the grading work on codabench for example in this project, like how will we be ranked? is it based on what our top results prediction per user show? and is there a concrete "true" value which we will be graded against? the test data?
+
+## Prompt: 2026-08-20
+> ok lets move on to the query building phase, what is the plan to implement this from our inverted index? share it to me and also briefly explain the math behind the calculations
+
+## Prompt: 2026-08-20
+> k so when the model is calculating the BM25 it has the inview articles but it doesnt know which ones are clicked and uncliked until later right?
+
+## Prompt: 2026-08-20
+> have we done Report recall@K (how many ground-truth clicked articles appear in the top-K candidates) for K ∈ {50, 100, 200}? how did we do it
+
+## Prompt: 2026-08-20
+> how is the recall currently doing? how much did we test on and what have we found on our scores
+
+## Prompt: 2026-08-20
+> now next part we have to implement embedding based retrieval and we do have embeddings for ebNERD but do we have them for MIND? and if we use different embeddings then would the comparison later on be fair? discuss.
+
+## Prompt: 2026-08-20
+> okay lets move ahead with the plan of creating our own embeddings for both the languages and we will use them. before we go on give an estimate as to how long it will take to download and then compute for the embeddings. do it per language and also suggest which base models (like BERT and ROBERTa) you propose and justify
+
