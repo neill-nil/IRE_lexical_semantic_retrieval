@@ -1,0 +1,9 @@
+torch
+pandas
+numpy
+polars
+sentence-transformers
+faiss-cpu
+scikit-learn
+pyarrow
+fastparquet

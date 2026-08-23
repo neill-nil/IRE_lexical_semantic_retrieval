@@ -74,3 +74,31 @@ This document tracks the prompts provided by the user for Assignment 1: Lexical 
 ## Prompt: 2026-08-21
 > what do we need to do now for step 5 and 6? i dont think we can submit on small dataset anyway. I plan to run the entire small dataset on this pipeline start to finish overnight so i can have updated results tomorrow and then start with big datasets. but before all of that is there anything we should tackle first?
 
+## Prompt: 2026-08-23
+> can u create a kaggle ready zip for all necessary files to run this on large datasets and i will not directly upload the datasets to kaggle myself so do add the links to them (mentioned in assignment pdf but check the web yourself for the exact link etc), create this zip for me so i can upload to kaggle then give me the runnning instructions too
+
+## Prompt: 2026-08-23
+> what output will i get from kaggle that i can later submit on codabench
+
+## Prompt: 2026-08-23
+> i created dataset (this zip by uploading) but now how do i create or addd data from url for those ebnerd and mind large
+
+## Prompt: 2026-08-23
+> like this? it sys failed to load
+
+## Prompt: 2026-08-23
+> also this is the directory so what path should i put
+
+## Prompt: 2026-08-23
+> can we not write a wget to fetch mind large datasets from huggingface it is literally available there dawg
+
+## Prompt: 2026-08-23
+> is this where i create the token?
+
+## Prompt: 2026-08-23
+> so !wget --header="Authorization: Bearer hf_xxxxDLqT" -qO mind_train.zip https://huggingface.co/datasets/yjw1029/MIND/resolve/main/MINDlarge_train.zip
+works?
+
+## Prompt: 2026-08-23
+> i am saving and running in bg so i will run the entire notebook again technically
+

@@ -1,19 +1,20 @@
-import pandas as pd
+import polars as pl
 import os
 import glob
 import logging
+from datetime import timedelta
 
-def split_chronologically(df, max_time):
+def split_chronologically(df_lazy, max_time):
     # Test set: strictly the last 24 hours
-    test_cutoff = max_time - pd.Timedelta(days=1)
+    test_cutoff = max_time - timedelta(days=1)
     # Validation set: strictly the 24 hours before test set
-    val_cutoff = max_time - pd.Timedelta(days=2)
+    val_cutoff = max_time - timedelta(days=2)
     
-    test_mask = df['time'] > test_cutoff
-    val_mask = (df['time'] > val_cutoff) & (df['time'] <= test_cutoff)
-    train_mask = df['time'] <= val_cutoff
+    train_lazy = df_lazy.filter(pl.col('time') <= val_cutoff)
+    val_lazy = df_lazy.filter((pl.col('time') > val_cutoff) & (pl.col('time') <= test_cutoff))
+    test_lazy = df_lazy.filter(pl.col('time') > test_cutoff)
     
-    return df[train_mask], df[val_mask], df[test_mask]
+    return train_lazy, val_lazy, test_lazy
 
 def run(dataset='both'):
     logging.info("Starting chronological temporal splitting...")
@@ -26,8 +27,8 @@ def run(dataset='both'):
     
     datasets_to_process = []
     if dataset in ['mind', 'both']:
-        # Match MINDsmall_train and MINDsmall_dev processed folders
         datasets_to_process.extend(glob.glob(os.path.join(proc_dir, 'MINDsmall*')))
+        datasets_to_process.extend(glob.glob(os.path.join(proc_dir, 'MINDlarge*')))
     if dataset in ['ebnerd', 'both']:
         datasets_to_process.extend(glob.glob(os.path.join(proc_dir, 'ebnerd*')))
         
@@ -38,44 +39,50 @@ def run(dataset='both'):
         
         logging.info(f"  Splitting interactions for {dataset_name}...")
         
-        # Load all available impressions for the dataset
         impressions_list = []
         
-        # Check root level (like MIND)
         imp_file = os.path.join(d_path, 'impressions.parquet')
         if os.path.exists(imp_file):
-            impressions_list.append(pd.read_parquet(imp_file))
+            impressions_list.append(imp_file)
             
-        # Check subfolders (like EB-NeRD train/ validation/)
         for sub in ['train', 'validation']:
             sub_imp = os.path.join(d_path, sub, 'impressions.parquet')
             if os.path.exists(sub_imp):
-                impressions_list.append(pd.read_parquet(sub_imp))
+                impressions_list.append(sub_imp)
                 
         if not impressions_list:
             logging.warning(f"  No impressions found for {dataset_name}. Skipping...")
             continue
             
-        # Concatenate and sort chronologically
-        df_imp = pd.concat(impressions_list, ignore_index=True)
-        df_imp = df_imp.sort_values(by='time', ascending=True).reset_index(drop=True)
+        # 1. Concat and Sort via LazyFrame
+        df_lazy = pl.concat([pl.scan_parquet(p) for p in impressions_list]).sort('time')
         
-        max_time = df_imp['time'].max()
-        train_df, val_df, test_df = split_chronologically(df_imp, max_time)
+        # 2. Get the maximum time
+        max_time = df_lazy.select(pl.col('time').max()).collect().item()
         
-        logging.info(f"    Train size: {len(train_df)}")
-        logging.info(f"    Val size:   {len(val_df)}")
-        logging.info(f"    Test size:  {len(test_df)}")
+        if max_time is None:
+            continue
+            
+        train_lazy, val_lazy, test_lazy = split_chronologically(df_lazy, max_time)
+        
+        # 3. Collect (execute query) and Write
+        # Using streaming=True keeps memory usage extremely low
+        train_df = train_lazy.collect(streaming=True)
+        val_df = val_lazy.collect(streaming=True)
+        test_df = test_lazy.collect(streaming=True)
+        
+        logging.info(f"    Train size: {train_df.height}")
+        logging.info(f"    Val size:   {val_df.height}")
+        logging.info(f"    Test size:  {test_df.height}")
         
         # Strict validation checks to ensure zero future-click leakage
-        if len(train_df) > 0 and len(val_df) > 0:
+        if train_df.height > 0 and val_df.height > 0:
             assert train_df['time'].max() <= val_df['time'].min(), "Leakage detected between Train and Val!"
-        if len(val_df) > 0 and len(test_df) > 0:
+        if val_df.height > 0 and test_df.height > 0:
             assert val_df['time'].max() <= test_df['time'].min(), "Leakage detected between Val and Test!"
         
-        # Save to feature store
-        train_df.to_parquet(os.path.join(out_store, 'impressions_train.parquet'))
-        val_df.to_parquet(os.path.join(out_store, 'impressions_val.parquet'))
-        test_df.to_parquet(os.path.join(out_store, 'impressions_test.parquet'))
+        train_df.write_parquet(os.path.join(out_store, 'impressions_train.parquet'))
+        val_df.write_parquet(os.path.join(out_store, 'impressions_val.parquet'))
+        test_df.write_parquet(os.path.join(out_store, 'impressions_test.parquet'))
         
     logging.info("Temporal splitting complete. Impressions saved to feature_store.")

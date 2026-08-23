@@ -36,4 +36,7 @@ def run(dataset='both'):
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(extract_to)
             
+        logging.info(f"Deleting {filename} to free up disk space...")
+        os.remove(zip_path)
+            
     logging.info("Extraction complete.")

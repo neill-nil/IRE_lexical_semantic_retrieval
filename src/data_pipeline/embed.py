@@ -8,12 +8,15 @@ from sentence_transformers import SentenceTransformer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def run(dataset='both'):
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    store_dir = os.path.join(base_dir, 'data', 'feature_store')
+    
     if dataset == 'both':
-        datasets = ['MINDsmall_train', 'MINDsmall_dev', 'ebnerd_small', 'ebnerd_demo']
+        datasets = [d for d in os.listdir(store_dir) if os.path.isdir(os.path.join(store_dir, d))]
     elif dataset == 'mind':
-        datasets = ['MINDsmall_train', 'MINDsmall_dev']
+        datasets = [d for d in os.listdir(store_dir) if 'MIND' in d and os.path.isdir(os.path.join(store_dir, d))]
     elif dataset == 'ebnerd':
-        datasets = ['ebnerd_small', 'ebnerd_demo']
+        datasets = [d for d in os.listdir(store_dir) if 'ebnerd' in d and os.path.isdir(os.path.join(store_dir, d))]
     else:
         datasets = [dataset]
         

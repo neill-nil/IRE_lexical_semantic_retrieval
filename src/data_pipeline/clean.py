@@ -1,32 +1,17 @@
 import pandas as pd
 import numpy as np
+import polars as pl
 import os
 import glob
 import logging
 
-def parse_mind_impressions(imp_str):
-    if pd.isna(imp_str):
-        return [], []
-    clicked = []
-    unclicked = []
-    for item in str(imp_str).split():
-        if '-' in item:
-            article_id, click = item.split('-')
-            if click == '1':
-                clicked.append(article_id)
-            else:
-                unclicked.append(article_id)
-    return clicked, unclicked
-
 def process_mind(raw_dir, proc_dir):
     logging.info("Processing MIND dataset...")
     
-    # We look for MINDsmall_train and MINDsmall_dev
-    mind_dirs = glob.glob(os.path.join(raw_dir, 'MINDsmall*'))
+    mind_dirs = glob.glob(os.path.join(raw_dir, 'MINDsmall*')) + glob.glob(os.path.join(raw_dir, 'MINDlarge*'))
     
     for mind_dir in mind_dirs:
         split_name = os.path.basename(mind_dir)
-        # Handle the double directory structure from extraction
         target_dir = os.path.join(mind_dir, split_name) if os.path.exists(os.path.join(mind_dir, split_name)) else mind_dir
         
         news_path = os.path.join(target_dir, 'news.tsv')
@@ -41,43 +26,61 @@ def process_mind(raw_dir, proc_dir):
         # 1. Articles
         logging.info(f"  Parsing MIND Articles for {split_name}...")
         news_cols = ['article_id', 'category', 'subcategory', 'title', 'abstract', 'url', 'title_entities', 'abstract_entities']
-        articles = pd.read_csv(news_path, sep='\t', names=news_cols)
+        articles = pl.read_csv(news_path, separator='\t', has_header=False, new_columns=news_cols, quote_char=None, truncate_ragged_lines=True)
         
-        unified_articles = pd.DataFrame({
-            'article_id': articles['article_id'],
-            'title': articles['title'].fillna(''),
-            'abstract': articles['abstract'].fillna(''),
-            'body': '',  # MIND small typically lacks full body text
-            'category': articles['category'].fillna('')
-        })
-        unified_articles.to_parquet(os.path.join(out_dir, 'articles.parquet'))
+        unified_articles = articles.select([
+            pl.col('article_id').cast(pl.Utf8),
+            pl.col('title').fill_null(""),
+            pl.col('abstract').fill_null(""),
+            pl.lit("").alias('body'),
+            pl.col('category').fill_null("")
+        ])
+        unified_articles.write_parquet(os.path.join(out_dir, 'articles.parquet'))
         
         # 2. Behaviors & Users
         logging.info(f"  Parsing MIND Behaviors & Users for {split_name}...")
         beh_cols = ['impression_id', 'user_id', 'time', 'history', 'impressions']
-        behaviors = pd.read_csv(beh_path, sep='\t', names=beh_cols)
+        behaviors = pl.read_csv(beh_path, separator='\t', has_header=False, new_columns=beh_cols, quote_char=None, truncate_ragged_lines=True)
         
         # Users (Click History)
-        users = behaviors.groupby('user_id')['history'].first().reset_index()
-        users['history'] = users['history'].apply(lambda x: str(x).split() if pd.notna(x) else [])
-        users.to_parquet(os.path.join(out_dir, 'users.parquet'))
+        users = behaviors.group_by('user_id').agg(pl.col('history').first()).with_columns(
+            pl.col('history').fill_null("").str.split(" ")
+        ).select([
+            pl.col('user_id').cast(pl.Utf8),
+            pl.col('history').cast(pl.List(pl.Utf8))
+        ])
+        users.write_parquet(os.path.join(out_dir, 'users.parquet'))
         
         # Impressions
-        behaviors['time'] = pd.to_datetime(behaviors['time'])
+        def parse_mind_impressions(imp_str):
+            if not imp_str: return {"clicked": [], "unclicked": []}
+            c, u = [], []
+            for item in str(imp_str).split():
+                if '-' in item:
+                    aid, click = item.split('-')
+                    if click == '1': c.append(aid)
+                    else: u.append(aid)
+            return {"clicked": c, "unclicked": u}
+            
+        parsed = behaviors.select(pl.col("impressions").map_elements(parse_mind_impressions, return_dtype=pl.Struct([pl.Field("clicked", pl.List(pl.Utf8)), pl.Field("unclicked", pl.List(pl.Utf8))])).alias("parsed")).unnest("parsed")
         
-        # Parse impressions into clicked and unclicked lists
-        parsed = behaviors['impressions'].apply(parse_mind_impressions)
-        behaviors['clicked_articles'] = parsed.apply(lambda x: x[0])
-        behaviors['unclicked_articles'] = parsed.apply(lambda x: x[1])
+        # Try multiple datetime formats for MIND since some are AM/PM and some are 24hr
+        time_col = pl.coalesce([
+            pl.col('time').str.strptime(pl.Datetime, "%m/%d/%Y %I:%M:%S %p", strict=False),
+            pl.col('time').str.strptime(pl.Datetime, "%m/%d/%Y %H:%M:%S", strict=False)
+        ])
         
-        unified_impressions = pd.DataFrame({
-            'impression_id': behaviors['impression_id'].astype(str),
-            'user_id': behaviors['user_id'],
-            'time': behaviors['time'],
-            'clicked_articles': behaviors['clicked_articles'],
-            'unclicked_articles': behaviors['unclicked_articles']
-        })
-        unified_impressions.to_parquet(os.path.join(out_dir, 'impressions.parquet'))
+        unified_impressions = behaviors.with_columns([
+            parsed["clicked"].alias("clicked_articles"),
+            parsed["unclicked"].alias("unclicked_articles")
+        ]).select([
+            pl.col('impression_id').cast(pl.Utf8),
+            pl.col('user_id').cast(pl.Utf8),
+            time_col.alias('time'),
+            pl.col('clicked_articles'),
+            pl.col('unclicked_articles')
+        ])
+        unified_impressions.write_parquet(os.path.join(out_dir, 'impressions.parquet'))
 
 
 def process_ebnerd(raw_dir, proc_dir):
@@ -95,17 +98,27 @@ def process_ebnerd(raw_dir, proc_dir):
         # 1. Articles
         if os.path.exists(articles_path):
             logging.info(f"  Parsing EB-NeRD Articles for {split_name}...")
-            articles = pd.read_parquet(articles_path)
-            unified_articles = pd.DataFrame({
-                'article_id': articles['article_id'].astype(str),
-                'title': articles['title'].fillna(''),
-                'abstract': articles.get('subtitle', pd.Series(['']*len(articles))).fillna(''),
-                'body': articles.get('body', pd.Series(['']*len(articles))).fillna(''),
-                'category': articles.get('category_str', articles.get('category', pd.Series(['']*len(articles)))).fillna('')
-            })
-            unified_articles.to_parquet(os.path.join(out_dir, 'articles.parquet'))
+            articles = pl.read_parquet(articles_path)
             
-        # EB-NeRD has subfolders like train/ and validation/ inside the zip
+            # Subtitle/body/category might be missing in some splits, handle gracefully
+            if "subtitle" not in articles.columns:
+                articles = articles.with_columns(pl.lit("").alias("subtitle"))
+            if "body" not in articles.columns:
+                articles = articles.with_columns(pl.lit("").alias("body"))
+            if "category_str" not in articles.columns and "category" not in articles.columns:
+                articles = articles.with_columns(pl.lit("").alias("category_str"))
+                
+            cat_col = pl.col("category_str") if "category_str" in articles.columns else pl.col("category")
+            
+            unified_articles = articles.select([
+                pl.col('article_id').cast(pl.Utf8),
+                pl.col('title').fill_null(""),
+                pl.col('subtitle').fill_null("").alias('abstract'),
+                pl.col('body').fill_null(""),
+                cat_col.fill_null("").alias('category')
+            ])
+            unified_articles.write_parquet(os.path.join(out_dir, 'articles.parquet'))
+            
         for sub_split in ['train', 'validation']:
             sub_dir = os.path.join(ebnerd_dir, sub_split)
             if not os.path.exists(sub_dir):
@@ -118,44 +131,38 @@ def process_ebnerd(raw_dir, proc_dir):
             hist_path = os.path.join(sub_dir, 'history.parquet')
             if os.path.exists(hist_path):
                 logging.info(f"  Parsing EB-NeRD History for {split_name}/{sub_split}...")
-                history = pd.read_parquet(hist_path)
-                unified_users = pd.DataFrame({
-                    'user_id': history['user_id'].astype(str),
-                    'history': history['article_id_fixed'].apply(lambda x: [str(i) for i in x] if x is not None else [])
-                })
-                # Drop duplicates if multiple rows per user exist
-                unified_users = unified_users.drop_duplicates(subset=['user_id'])
-                unified_users.to_parquet(os.path.join(sub_out_dir, 'users.parquet'))
+                
+                # Use LazyFrame to prevent OOM
+                unified_users = (
+                    pl.scan_parquet(hist_path)
+                    .select([
+                        pl.col('user_id').cast(pl.Utf8),
+                        pl.col('article_id_fixed').cast(pl.List(pl.Utf8)).alias('history')
+                    ])
+                    .unique(subset=['user_id'], maintain_order=False)
+                    .collect(streaming=True)
+                )
+                unified_users.write_parquet(os.path.join(sub_out_dir, 'users.parquet'))
                 
             # 3. Impressions
             beh_path = os.path.join(sub_dir, 'behaviors.parquet')
             if os.path.exists(beh_path):
                 logging.info(f"  Parsing EB-NeRD Behaviors for {split_name}/{sub_split}...")
-                behaviors = pd.read_parquet(beh_path)
                 
-                # Compute unclicked by doing set difference: inview - clicked
-
-                
-                # actually:
-                def safe_str_list(arr):
-                    if arr is None: return []
-                    if isinstance(arr, np.ndarray): return [str(x) for x in arr]
-                    return [str(x) for x in arr]
-                    
-                unified_impressions = pd.DataFrame({
-                    'impression_id': behaviors['impression_id'].astype(str),
-                    'user_id': behaviors['user_id'].astype(str),
-                    'time': pd.to_datetime(behaviors['impression_time']),
-                    'clicked_articles': behaviors['article_ids_clicked'].apply(safe_str_list),
-                })
-                
-                inview_series = behaviors['article_ids_inview'].apply(safe_str_list)
-                unified_impressions['unclicked_articles'] = [
-                    [i for i in inv if i not in set(clk)] 
-                    for inv, clk in zip(inview_series, unified_impressions['clicked_articles'])
-                ]
-                
-                unified_impressions.to_parquet(os.path.join(sub_out_dir, 'impressions.parquet'))
+                unified_impressions = (
+                    pl.scan_parquet(beh_path)
+                    .select([
+                        pl.col('impression_id').cast(pl.Utf8),
+                        pl.col('user_id').cast(pl.Utf8),
+                        pl.col('impression_time').alias('time'),
+                        pl.col('article_ids_clicked').cast(pl.List(pl.Utf8)).alias('clicked_articles'),
+                        pl.col('article_ids_inview').cast(pl.List(pl.Utf8)).list.set_difference(
+                            pl.col('article_ids_clicked').cast(pl.List(pl.Utf8))
+                        ).alias('unclicked_articles')
+                    ])
+                    .collect(streaming=True)
+                )
+                unified_impressions.write_parquet(os.path.join(sub_out_dir, 'impressions.parquet'))
 
 
 def run(dataset='both'):
