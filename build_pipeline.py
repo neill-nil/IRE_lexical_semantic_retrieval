@@ -1,6 +1,7 @@
 import argparse
 import logging
 from src.data_pipeline import extract, clean, split, feature_store, embed
+from src.retrieval import bm25, train_ranker
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -31,7 +32,15 @@ def main():
     # Step 5: Compute Semantic Embeddings
     logging.info("--- Step 5: Computing Semantic Embeddings ---")
     embed.run(dataset=args.dataset)
-    
+
+    # Step 6: Build BM25 Inverted Indices
+    logging.info("--- Step 6: Building BM25 Indices ---")
+    bm25.run(dataset=args.dataset)
+
+    # Step 7: Train Hybrid Ranker (BM25 + semantic + popularity + recency)
+    logging.info("--- Step 7: Training Hybrid Ranker ---")
+    train_ranker.run(dataset=args.dataset)
+
     logging.info("Data pipeline build complete!")
 
 if __name__ == "__main__":

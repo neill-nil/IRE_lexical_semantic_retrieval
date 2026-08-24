@@ -81,6 +81,42 @@ class BM25Index:
                 'inverted_index': self.inverted_index
             }, f)
 
+    def add_documents(self, corpus_dict):
+        """In-memory-only incorporation of documents the persisted index was
+        never built with (e.g. articles that only exist in a test-period
+        bundle). Skips ids already indexed. IDF is recomputed exactly for
+        tokens touched by the new documents; IDF for untouched tokens is
+        left as-is (a second-order approximation, since N technically grew
+        for them too) -- fine for scoring a handful of otherwise-unscored
+        candidates, not meant to replace rebuilding the index from scratch.
+        Do not call save() after this -- the update is not persisted.
+        """
+        added_lengths = []
+        touched_tokens = set()
+        for doc_id, text in corpus_dict.items():
+            if doc_id in self.doc_lens:
+                continue
+            tokens = self.tokenize(text)
+            self.doc_lens[doc_id] = len(tokens)
+            added_lengths.append(len(tokens))
+            term_freqs = defaultdict(int)
+            for tok in tokens:
+                term_freqs[tok] += 1
+            for tok, tf in term_freqs.items():
+                self.inverted_index.setdefault(tok, {})[doc_id] = tf
+                touched_tokens.add(tok)
+
+        if not added_lengths:
+            return 0
+
+        total_len_before = self.avgdl * self.N
+        self.N += len(added_lengths)
+        self.avgdl = (total_len_before + sum(added_lengths)) / self.N
+        for tok in touched_tokens:
+            df = len(self.inverted_index[tok])
+            self.idf[tok] = math.log(1 + (self.N - df + 0.5) / (df + 0.5))
+        return len(added_lengths)
+
     @classmethod
     def load(cls, path):
         logging.info(f"Loading BM25 index from {path}...")
@@ -96,31 +132,61 @@ class BM25Index:
         return index
 
 
-def build_index_for_dataset(dataset_name):
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+def build_index_for_dataset(dataset_name, base_dir=None):
+    base_dir = base_dir or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     store_dir = os.path.join(base_dir, 'data', 'feature_store', dataset_name)
-    
+
     articles_path = os.path.join(store_dir, 'articles.parquet')
     if not os.path.exists(articles_path):
         logging.warning(f"No articles found for {dataset_name} at {articles_path}")
         return
-        
+
     logging.info(f"Loading articles for {dataset_name}...")
     articles = pd.read_parquet(articles_path)
-    
+
     # Create concatenated text corpus (title + abstract)
     articles['full_text'] = articles['title'].fillna('') + " " + articles['abstract'].fillna('')
     corpus_dict = dict(zip(articles['article_id'], articles['full_text']))
-    
+
     # Build Index
     bm25 = BM25Index()
     bm25.fit(corpus_dict)
-    
+
     # Save Index
     bm25.save(os.path.join(store_dir, 'bm25_index.pkl'))
 
 
-if __name__ == '__main__':
-    datasets = ['MINDsmall_train', 'MINDsmall_dev', 'ebnerd_small', 'ebnerd_demo']
+def run(dataset='both'):
+    """Build BM25 indices for every feature-store dataset matching the
+    --dataset filter. Mirrors embed.run()'s dynamic directory scan so new
+    datasets (e.g. MINDlarge_test, ebnerd_large) don't need to be
+    hardcoded here to be picked up by build_pipeline.py.
+    """
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    store_root = os.path.join(base_dir, 'data', 'feature_store')
+    if not os.path.isdir(store_root):
+        return
+
+    all_dirs = [d for d in os.listdir(store_root) if os.path.isdir(os.path.join(store_root, d))]
+    if dataset == 'mind':
+        datasets = [d for d in all_dirs if 'MIND' in d]
+    elif dataset == 'ebnerd':
+        datasets = [d for d in all_dirs if 'ebnerd' in d]
+    else:
+        datasets = all_dirs
+
     for ds in datasets:
-        build_index_for_dataset(ds)
+        index_path = os.path.join(store_root, ds, 'bm25_index.pkl')
+        if os.path.exists(index_path):
+            logging.info(f"BM25 index already exists for {ds}. Skipping...")
+            continue
+        logging.info(f"--- Building BM25 index for {ds} ---")
+        build_index_for_dataset(ds, base_dir=base_dir)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description="Build BM25 inverted indices.")
+    parser.add_argument('--dataset', type=str, choices=['mind', 'ebnerd', 'both'], default='both')
+    args = parser.parse_args()
+    run(dataset=args.dataset)

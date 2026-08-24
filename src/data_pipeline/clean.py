@@ -33,7 +33,8 @@ def process_mind(raw_dir, proc_dir):
             pl.col('title').fill_null(""),
             pl.col('abstract').fill_null(""),
             pl.lit("").alias('body'),
-            pl.col('category').fill_null("")
+            pl.col('category').fill_null(""),
+            pl.lit(None, dtype=pl.Datetime).alias('published_time')
         ])
         unified_articles.write_parquet(os.path.join(out_dir, 'articles.parquet'))
         
@@ -107,16 +108,65 @@ def process_ebnerd(raw_dir, proc_dir):
                 articles = articles.with_columns(pl.lit("").alias("body"))
             if "category_str" not in articles.columns and "category" not in articles.columns:
                 articles = articles.with_columns(pl.lit("").alias("category_str"))
-                
+            if "published_time" not in articles.columns:
+                articles = articles.with_columns(pl.lit(None, dtype=pl.Datetime).alias("published_time"))
+
             cat_col = pl.col("category_str") if "category_str" in articles.columns else pl.col("category")
-            
+
             unified_articles = articles.select([
                 pl.col('article_id').cast(pl.Utf8),
                 pl.col('title').fill_null(""),
                 pl.col('subtitle').fill_null("").alias('abstract'),
                 pl.col('body').fill_null(""),
-                cat_col.fill_null("").alias('category')
+                cat_col.fill_null("").alias('category'),
+                pl.col('published_time')
             ])
+
+            # articles_large_only.zip (new in the assignment's large-scale setup)
+            # supplements ebnerd_large's own articles.parquet with additional
+            # articles -- almost certainly the official fix for the same
+            # test-period coverage gap generate_submission.py works around at
+            # inference time. Schema isn't documented, so this merge is
+            # best-effort: normalize with the same column fallbacks used
+            # above, keep only article_ids not already present, and skip
+            # cleanly (with a clear log line) if the file doesn't look like
+            # we expect rather than crashing the pipeline.
+            if split_name == 'ebnerd_large':
+                extra_dir = os.path.join(os.path.dirname(ebnerd_dir), 'articles_large_only')
+                if os.path.isdir(extra_dir):
+                    extra_parquets = glob.glob(os.path.join(extra_dir, '**', '*.parquet'), recursive=True)
+                    for extra_path in extra_parquets:
+                        try:
+                            extra = pl.read_parquet(extra_path)
+                            if 'article_id' not in extra.columns or 'title' not in extra.columns:
+                                logging.warning(f"  {extra_path} doesn't look like an article table (missing article_id/title) -- skipping.")
+                                continue
+                            extra_subtitle = pl.col('subtitle').fill_null("") if 'subtitle' in extra.columns else pl.lit("")
+                            extra_body = pl.col('body').fill_null("") if 'body' in extra.columns else pl.lit("")
+                            extra_cat = (pl.col('category_str') if 'category_str' in extra.columns
+                                         else pl.col('category') if 'category' in extra.columns
+                                         else pl.lit(""))
+                            extra_published = pl.col('published_time') if 'published_time' in extra.columns else pl.lit(None, dtype=pl.Datetime)
+
+                            extra_unified = extra.select([
+                                pl.col('article_id').cast(pl.Utf8),
+                                pl.col('title').fill_null(""),
+                                extra_subtitle.alias('abstract'),
+                                extra_body.alias('body'),
+                                extra_cat.fill_null("").alias('category'),
+                                extra_published.alias('published_time'),
+                            ])
+
+                            known_ids = unified_articles['article_id']
+                            new_rows = extra_unified.filter(~pl.col('article_id').is_in(known_ids))
+                            if new_rows.height > 0:
+                                unified_articles = pl.concat([unified_articles, new_rows])
+                                logging.info(f"  Merged {new_rows.height} additional articles from {extra_path} into ebnerd_large's catalog.")
+                            else:
+                                logging.info(f"  {extra_path} contributed no new article_ids beyond ebnerd_large's own catalog.")
+                        except Exception as e:
+                            logging.warning(f"  Could not merge {extra_path} into the article catalog ({e}) -- skipping it.")
+
             unified_articles.write_parquet(os.path.join(out_dir, 'articles.parquet'))
             
         for sub_split in ['train', 'validation']:

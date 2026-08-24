@@ -20,5 +20,24 @@ venv/
 env/
 .env
 
+# Assignment reference material (not a code deliverable -- the design
+# note goes to Moodle, not GitHub Classroom)
+*.pdf
+assignment.txt
+
+# Logs
+*.log
+
+# Throwaway/scratch scripts
+scratch.py
+
+# Claude Code local runtime state
+.claude/
+
+# Personal working notes (useful locally, not part of the graded code)
+KAGGLE_INSTRUCTIONS.md
+CHANGES_SUMMARY.md
+STUDY_GUIDE.md
+
 # System Files
 .DS_Store

@@ -90,15 +90,77 @@ This document tracks the prompts provided by the user for Assignment 1: Lexical 
 > also this is the directory so what path should i put
 
 ## Prompt: 2026-08-23
-> can we not write a wget to fetch mind large datasets from huggingface it is literally available there dawg
-
-## Prompt: 2026-08-23
-> is this where i create the token?
-
-## Prompt: 2026-08-23
-> so !wget --header="Authorization: Bearer hf_xxxxDLqT" -qO mind_train.zip https://huggingface.co/datasets/yjw1029/MIND/resolve/main/MINDlarge_train.zip
-works?
+> can we not write a wget to fetch mind large datasets from huggingface it is literally available there
 
 ## Prompt: 2026-08-23
 > i am saving and running in bg so i will run the entire notebook again technically
+
+## Prompt: 2026-08-24
+> please go through the assignment 1 pdf and understand the assignment clearly. then look at my code analyuse it and report the weak spots which can be improved to make the score better on leaderboard. currently for mind i am getting score of around 0.61 and 0.54 for ebnerd. I want to improve this score and see where the shortcomings are. lastly, tell me which method? bm25 or semantic with embeddings did we choose for our predictions right now and why
+
+## Prompt: 2026-08-24
+> please fix and work on these things you are talking about and after that update kaggle_bundle.zip so i can run the large datasets computations there and generate predictions. also tell me steps to run the same
+
+## Prompt: 2026-08-24
+> give me a summary of what changes you did and add it in a new doc, mention the changes, the things you ran locally and the things i have to now run too
+
+## Prompt: 2026-08-24
+> for the small datasets did u update the metrics file and log the scores we are getting? did it perform better after your changes
+
+## Prompt: 2026-08-24
+> briefly explain to me how hybrid works, how it retrieves and ranks
+
+## Prompt: 2026-08-24
+> (Pasted my Kaggle notebook cells) I am sending you the code cells of my kaggle notebook i was previously running, correct it wherever required according to the new code so i can generate submission files for codabench
+
+## Prompt: 2026-08-24
+> any estimate on how long it is expected to run on kaggle?
+
+## Prompt: 2026-08-24
+> (Shared a Kaggle log screenshot showing zip extraction + deletion) is this expected?
+
+## Prompt: 2026-08-24
+> (Shared a Kaggle log screenshot of the ranker training AUC) found this while tunning, it is still running
+
+## Prompt: 2026-08-24
+> (Shared another ranker training screenshot) but is it an improvement for before? i had 0.61 on mind before? this is what i found a little earlier, also why are we sampling 200k entries
+
+## Prompt: 2026-08-24
+> (Shared a Kaggle progress-log screenshot) this looks like it will take time based on the speed and whats left
+
+## Prompt: 2026-08-24
+> there is a new version of the assignment in A1.pdf, check it once it only has minor changes i think we dont have to make any change for this as they are only clarifying the use of large datasets for submission but still pls check
+
+## Prompt: 2026-08-24
+> do i need to make any other change in my kaggle notebook?
+
+## Prompt: 2026-08-24
+> (Shared a Kaggle log screenshot) just clarify cause seeing an auc on hybrid for mind large train to be 0.59 seems low, so would we get a better score on test when i submit?
+
+## Prompt: 2026-08-24
+> what exactly is our feature store and why are we using it
+
+## Prompt: 2026-08-24
+> if train and val samples have the true "clicked articles by the user" how are we using that information to train our approach and make it better, exactly because we are using only the bm25 and semantic which is depending on history right?
+
+## Prompt: 2026-08-24
+> what metric are we using for users with zero history to show them the articles and how are we doing it
+
+## Prompt: 2026-08-24
+> you said EB-NeRD's test-period articles were invisible to the model, explain what exact data was the model not seeing and where was it supposed to be at
+
+## Prompt: 2026-08-24
+> i dont understand explain with an example
+
+## Prompt: 2026-08-24
+> the only metric being affected because of this was the recency one?
+
+## Prompt: 2026-08-25
+> bro my kaggle is already 2 hours away from finishing the previous run i dont think my quota can handle running again with this fix :(
+
+## Prompt: 2026-08-25
+> i am already running the improved speed version only, just this last recency change isnt there
+
+## Prompt: 2026-08-25
+> untrack kaggle instructions and such files which are for me personally and dont serve the code, plus if there are any past logs or any useless stuff delete it
 
