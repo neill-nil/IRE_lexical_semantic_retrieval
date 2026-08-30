@@ -164,3 +164,45 @@ This document tracks the prompts provided by the user for Assignment 1: Lexical 
 ## Prompt: 2026-08-25
 > untrack kaggle instructions and such files which are for me personally and dont serve the code, plus if there are any past logs or any useless stuff delete it
 
+## Prompt: 2026-08-28
+> so, on mind we now got 0.6253, a very little jump
+
+## Prompt: 2026-08-28
+> ok so now in ebnerd i got 0.6212 (an improvement yes) but i want to aim for a little higher. can we set sights on what we can improve without it going way too out of scope and complex? maybe try a different model instead of logistic regression, like a neural net or an ensemble? confirm the strategy of changing the model and update the scripts for one final run since i wont have time after this. need improvement for both ebnerd and mind, nothing major though, just something we can later explain as "trying things" to improve results
+
+## Prompt: 2026-08-29
+> i was running it in background anyway so i'll reupload the new zip and run it again... no changes needed in the notebook right?
+
+## Prompt: 2026-08-29
+> wait, first check this new ebnerd_testset_predictions.txt i just downloaded from kaggle from the timed-out session — not sure if it's an old pred file or the new one with missing data since it got interrupted, can you check?
+
+## Prompt: 2026-08-29
+> no, why are you reverting to logistic, we're literally done with that phase — obviously we go ahead with gradient boosting, resubmitting with the same old method doesn't make sense anyway. revert back to the gbm code and add temporary logic to resume this file and generate the remaining impressions, update the kaggle zip and tell me how to resume it
+
+## Prompt: 2026-08-29
+> why will it be logistic for 26% of it? i dont want that, i wanted 100% gbm
+
+## Prompt: 2026-08-29
+> now give me instructions on how to run this on kaggle — should i just reupload the kaggle bundle zip? and how do i make sure it's actually resuming from after the 10M predictions instead of starting over?
+
+## Prompt: 2026-08-29
+> can you check if there are any files in this project taking up a lot of space that are now useless and can be deleted to save memory?
+
+## Prompt: 2026-08-29
+> dont delete the files i'll need later for evaluation or my own reference — but the env and old prediction zips i think we can delete if i'm only running on kaggle now, assuming no local run is needed
+
+## Prompt: 2026-08-29
+> can i do the resuming as one job i can run in the background instead of interactively, since otherwise i'd have to keep my laptop on for 3-4 hours? i've already updated the kaggle bundle zip and uploaded the partial predictions into a new dataset, so what's next?
+
+## Prompt: 2026-08-29
+> (Shared a screenshot of the Kaggle dataset page for the partial predictions) this is how the dataset looks, so what should go in the slug for cell 4?
+
+## Prompt: 2026-08-29
+> (Shared a screenshot of `ls /kaggle/input/datasets/neillrawani` output) look, it's like this
+
+## Prompt: 2026-08-29
+> will the output of this kaggle run be the entire predictions.zip, or just the partial one?
+
+## Prompt: 2026-08-30
+> (Shared a screenshot of the Codabench leaderboard row) ok so now i got 0.664 on codabench, good. the auc, mrr, ndcg@5 and ndcg@10 are shown in image. i think we can wrap up unless we can still do minor changes and improve? very less time remaining so i dont think we should.
+
