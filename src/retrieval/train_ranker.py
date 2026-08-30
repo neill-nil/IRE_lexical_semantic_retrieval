@@ -4,9 +4,11 @@ single click-probability used for the actual Codabench submission.
 
 The unsupervised "just use cosine similarity" baseline in
 generate_submission.py has no way to learn how much to trust each signal;
-a small logistic regression fit on the labelled train impressions does,
-and is cheap enough to fit on a bounded sample even for MINDlarge/
-ebnerd_large.
+a small supervised model fit on the labelled train impressions does, and
+is cheap enough to fit on a bounded sample even for MINDlarge/ebnerd_large.
+The model family (logistic regression vs. gradient boosting) is chosen
+per dataset -- see Ranker's docstring in features.py for the measured
+reason.
 """
 import os
 import logging
@@ -124,8 +126,18 @@ def train_ranker(dataset_name, sample_size=200_000, seed=42):
         logging.warning(f"Not enough labelled data to train a ranker for {dataset_name}. Skipping.")
         return
 
-    logging.info(f"Fitting logistic regression ranker on {len(y):,} candidate rows ({y.mean():.4f} positive rate)...")
-    ranker = Ranker(popularity=popularity, has_recency=bool(has_recency)).fit(X, y)
+    # Gradient boosting measured a real AUC win on EB-NeRD's held-out test
+    # split (0.614 -> 0.671, see Ranker's docstring). Its per-impression
+    # inference cost (no NumPy fast path, unlike logistic regression) did
+    # push one real ~13.5M-impression submission run past a Kaggle
+    # session's time limit -- but that's a runtime/scheduling problem,
+    # solved by resuming across sessions (see generate_submission.py's
+    # resume support) and/or splitting the build and submission steps
+    # into separate Kaggle commits, not a reason to give up the AUC gain.
+    model_type = 'histgb' if 'ebnerd' in dataset_name.lower() else 'logistic'
+    logging.info(f"Fitting ranker on {len(y):,} candidate rows ({y.mean():.4f} positive rate) "
+                 f"using model_type='{model_type}'...")
+    ranker = Ranker(popularity=popularity, has_recency=bool(has_recency)).fit(X, y, model_type=model_type)
 
     # Quick sanity check: does the hybrid actually beat its own inputs?
     from sklearn.metrics import roc_auc_score

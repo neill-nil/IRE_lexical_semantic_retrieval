@@ -183,12 +183,38 @@ def generate_submission(dataset_name, raw_test_dir, ranker_dataset_name=None):
 
     output_file = os.path.join(base_dir, f"{raw_test_dir}_predictions.txt")
 
-    with open(output_file, "w") as f:
+    # Resume support: at 13.5M/2.37M test impressions, a single run can
+    # comfortably exceed a Kaggle session's time limit. If a previous
+    # attempt got partway through and was killed, don't redo that work --
+    # pick up where it left off instead of silently overwriting it.
+    done_ids = set()
+    if os.path.exists(output_file):
+        with open(output_file, 'rb+') as f:
+            content = f.read()
+            if content and not content.endswith(b'\n'):
+                # The process was killed mid-write of the last line -- drop
+                # that possibly-truncated line rather than trust it.
+                last_nl = content.rfind(b'\n')
+                content = content[:last_nl + 1]
+                f.seek(last_nl + 1)
+                f.truncate()
+            for line in content.splitlines():
+                if line:
+                    done_ids.add(line.split(b' ', 1)[0].decode())
+        if done_ids:
+            logging.info(f"Resuming: found {len(done_ids):,} predictions already written in "
+                         f"{output_file} -- skipping those instead of redoing them.")
+
+    with open(output_file, 'a' if done_ids else 'w') as f:
         for count, row in enumerate(behaviors_test.iter_rows(named=True)):
             if count > 0 and count % 50000 == 0:
                 logging.info(f"  Processed {count:,}/{total_rows:,} predictions...")
+                f.flush()
+                os.fsync(f.fileno())
 
             imp_id = str(row['impression_id'])
+            if imp_id in done_ids:
+                continue
             user_id = str(row['user_id'])
 
             if is_mind:

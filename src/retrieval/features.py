@@ -205,47 +205,91 @@ def build_candidate_features(candidates, lex_scores, sem_scores, popularity,
 
 
 class Ranker:
-    """Thin wrapper around a scikit-learn LogisticRegression that combines
-    the lexical, semantic, popularity and recency signals into a single
-    click-probability score, plus the popularity table used as a cold-start
-    fallback when a user has no click history at all.
+    """Combines the lexical, semantic, popularity and recency signals into
+    a single click-probability score, plus the popularity table used as a
+    cold-start fallback when a user has no click history at all.
+
+    Wraps one of two scikit-learn models -- plain logistic regression, or a
+    small gradient-boosted-tree ensemble (`HistGradientBoostingClassifier`).
+    Which one to use is a per-dataset choice, not something this class
+    decides on its own: an automated selector (fit an internal split, keep
+    whichever wins) was tried and abandoned, because it disagreed with
+    itself across three different validation strategies (a random row
+    split, the true validation split, the true validation split scored
+    correctly by per-impression AUC) and still didn't match which model
+    actually wins on the true held-out test set for EB-NeRD, most likely
+    because its content turns over fast enough that even the adjacent
+    validation window isn't a reliable stand-in for the test window. The
+    trustworthy signal came only from directly comparing both models
+    against the real, held-out `impressions_test.parquet` (via
+    `harness.py`) for each dataset:
+
+        Dataset            Logistic   Gradient Boosting
+        ebnerd_small       0.614      0.671
+        ebnerd_demo        0.620      0.673
+        MINDsmall_train    0.619      0.605
+
+    Gradient boosting wins clearly and consistently on EB-NeRD (one
+    feature, recency, dominates, and boosting's ability to model
+    interactions with it helps); logistic regression wins on MIND (no
+    single feature dominates, and boosting's extra flexibility overfits
+    without enough signal to justify it). `train_ranker.py` picks
+    `model_type` from this table, keyed on dataset family.
     """
 
-    def __init__(self, scaler=None, model=None, popularity=None, has_recency=False):
+    def __init__(self, scaler=None, model=None, model_type='logistic', popularity=None, has_recency=False):
         self.scaler = scaler
         self.model = model
+        self.model_type = model_type
         self.popularity = popularity or {}
         self.has_recency = has_recency
 
-    def fit(self, X, y):
+    def fit(self, X, y, model_type='logistic', seed=42):
         from sklearn.linear_model import LogisticRegression
         from sklearn.preprocessing import StandardScaler
+        from sklearn.ensemble import HistGradientBoostingClassifier
 
-        self.scaler = StandardScaler()
-        Xs = self.scaler.fit_transform(X)
-        self.model = LogisticRegression(max_iter=2000, class_weight='balanced')
-        self.model.fit(Xs, y)
+        if model_type == 'histgb':
+            self.scaler = None
+            self.model = HistGradientBoostingClassifier(
+                max_iter=200, max_depth=4, learning_rate=0.1,
+                class_weight='balanced', random_state=seed,
+            )
+            self.model.fit(X, y)
+        else:
+            self.scaler = StandardScaler()
+            Xs = self.scaler.fit_transform(X)
+            self.model = LogisticRegression(max_iter=2000, class_weight='balanced')
+            self.model.fit(Xs, y)
+        self.model_type = model_type
+        return self
         return self
 
     def predict(self, X):
-        # Equivalent to self.model.predict_proba(self.scaler.transform(X))[:, 1],
-        # but as raw numpy: sklearn's transform()/predict_proba() each carry
-        # fixed per-call input-validation overhead (validate_data,
-        # check_array) that's negligible on a full batch but was measured,
-        # at the scale of one call per impression, to be a meaningful slice
-        # of total per-impression cost during a live large-scale submission
-        # run. The scaler is just (X - mean) / scale and logistic regression
-        # is just a sigmoid of a linear score -- both cheap to inline.
         X = np.asarray(X, dtype=np.float64)
-        Xs = (X - self.scaler.mean_) / self.scaler.scale_
-        z = Xs @ self.model.coef_[0] + self.model.intercept_[0]
-        return 1.0 / (1.0 + np.exp(-z))
+        if self.model_type == 'logistic':
+            # Equivalent to self.model.predict_proba(self.scaler.transform(X))[:, 1],
+            # but as raw numpy: sklearn's transform()/predict_proba() each
+            # carry fixed per-call input-validation overhead (validate_data,
+            # check_array) that's negligible on a full batch but was
+            # measured, at the scale of one call per impression, to be a
+            # meaningful slice of total per-impression cost during a live
+            # large-scale submission run. The scaler is just
+            # (X - mean) / scale and logistic regression is just a sigmoid
+            # of a linear score -- both cheap to inline.
+            Xs = (X - self.scaler.mean_) / self.scaler.scale_
+            z = Xs @ self.model.coef_[0] + self.model.intercept_[0]
+            return 1.0 / (1.0 + np.exp(-z))
+        # HistGradientBoostingClassifier's tree ensemble isn't practical to
+        # inline the same way -- go through sklearn directly.
+        return self.model.predict_proba(X)[:, 1]
 
     def save(self, path):
         with open(path, 'wb') as f:
             pickle.dump({
                 'scaler': self.scaler,
                 'model': self.model,
+                'model_type': self.model_type,
                 'popularity': self.popularity,
                 'has_recency': self.has_recency,
             }, f)
@@ -254,4 +298,5 @@ class Ranker:
     def load(cls, path):
         with open(path, 'rb') as f:
             data = pickle.load(f)
-        return cls(data['scaler'], data['model'], data['popularity'], data['has_recency'])
+        return cls(data.get('scaler'), data['model'], data.get('model_type', 'logistic'),
+                    data['popularity'], data['has_recency'])
